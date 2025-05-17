@@ -1,12 +1,12 @@
-import { MercadoPagoConfig } from 'mercadopago';
+import { MercadoPagoConfig, Preference } from 'mercadopago';
 import dotenv from 'dotenv';
 import Payment from '../models/Payment.js';
 import User from '../models/User.js';
 
 dotenv.config();
 
-// Configurando o SDK do Mercado Pago (v2+)
-const mercadopago = new MercadoPagoConfig({
+// Configurando o SDK do Mercado Pago v2
+const client = new MercadoPagoConfig({
   accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN
 });
 
@@ -16,12 +16,24 @@ export const createPayment = async (req, res) => {
     const { planType = 'premium' } = req.body;
     const userId = req.user.id;
 
+    // Verificar se as variáveis de ambiente necessárias estão definidas
+    if (!process.env.FRONTEND_URL || !process.env.BACKEND_URL) {
+      console.error('URLs de ambiente não configuradas:', { 
+        FRONTEND_URL: process.env.FRONTEND_URL,
+        BACKEND_URL: process.env.BACKEND_URL
+      });
+      return res.status(500).json({ 
+        message: 'Erro na configuração do servidor', 
+        error: 'URLs de ambiente não configuradas corretamente'
+      });
+    }
+
     let amount = 29.90;
     if (planType === 'premium_plus') {
       amount = 49.90;
     }
 
-    const preference = {
+    const preferenceData = {
       items: [
         {
           title: `MindDesk ${planType.charAt(0).toUpperCase() + planType.slice(1)} - Assinatura Mensal`,
@@ -33,7 +45,7 @@ export const createPayment = async (req, res) => {
       payer: {
         email: req.user.email
       },
-      back_urls: {
+      back_url: {
         success: `${process.env.FRONTEND_URL}/payment/success`,
         failure: `${process.env.FRONTEND_URL}/payment/failure`,
         pending: `${process.env.FRONTEND_URL}/payment/pending`
@@ -44,7 +56,14 @@ export const createPayment = async (req, res) => {
       statement_descriptor: 'MindDesk App'
     };
 
-    const response = await mercadopago.preference.create({ body: preference });
+    // Log da preferência para debug
+    console.log('Criando preferência de pagamento:', JSON.stringify(preferenceData, null, 2));
+
+    // Criar a preferência usando o client do SDK v2
+    const preference = new Preference(client);
+    const response = await preference.create({ body: preferenceData });
+    
+    console.log('Resposta da API do Mercado Pago:', JSON.stringify(response, null, 2));
 
     const payment = await Payment.create({
       user: userId,
@@ -74,7 +93,10 @@ export const webhookHandler = async (req, res) => {
     if (type === 'payment') {
       const paymentId = data.id;
 
-      const paymentInfo = await mercadopago.payment.findById(paymentId);
+      // Usando a API v2 do Mercado Pago para buscar informações de pagamento
+      const paymentClient = new Payment(client);
+      const paymentInfo = await paymentClient.get({ id: paymentId });
+      
       const { status, external_reference: userId, transaction_amount, payment_method_id, payment_type_id } = paymentInfo;
 
       const payment = await Payment.findOne({
