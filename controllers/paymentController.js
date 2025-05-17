@@ -1,6 +1,6 @@
-import { MercadoPagoConfig, Preference } from 'mercadopago';
+import { MercadoPagoConfig, Payment, Preference } from 'mercadopago';
 import dotenv from 'dotenv';
-import Payment from '../models/Payment.js';
+import PaymentModel from '../models/Payment.js';
 import User from '../models/User.js';
 
 dotenv.config();
@@ -10,7 +10,7 @@ const client = new MercadoPagoConfig({
   accessToken: process.env.MERCADO_PAGO_ACCESS_TOKEN
 });
 
-// Criar uma preferência de pagamento
+// Criar uma preferência de pagamento (método original)
 export const createPayment = async (req, res) => {
   try {
     const { planType = 'premium' } = req.body;
@@ -81,7 +81,7 @@ export const createPayment = async (req, res) => {
     
     console.log('Resposta da API do Mercado Pago:', JSON.stringify(response, null, 2));
 
-    const payment = await Payment.create({
+    const payment = await PaymentModel.create({
       user: userId,
       mercadoPagoId: response.id,
       amount,
@@ -98,6 +98,152 @@ export const createPayment = async (req, res) => {
   } catch (error) {
     console.error('Erro ao criar pagamento:', error);
     res.status(500).json({ message: 'Erro ao processar pagamento', error: error.message });
+  }
+};
+
+// Nova implementação para pagamento direto via API
+export const createDirectPayment = async (req, res) => {
+  try {
+    const { userData, paymentData } = req.body;
+    const userId = req.user.id;
+
+    // Verificar se os dados necessários foram enviados
+    if (!paymentData || !paymentData.token || !paymentData.payment_method_id) {
+      return res.status(400).json({ 
+        message: 'Dados de pagamento incompletos',
+        requiredFields: ['token', 'payment_method_id', 'transaction_amount']
+      });
+    }
+
+    // Log para debug
+    console.log('Processando pagamento direto:', JSON.stringify({
+      userId,
+      email: req.user.email,
+      paymentAmount: paymentData.transaction_amount
+    }, null, 2));
+
+    // Determinar o tipo de assinatura com base no valor
+    let subscriptionType = 'premium';
+    if (paymentData.transaction_amount >= 49.90) {
+      subscriptionType = 'premium_plus';
+    }
+
+    // Montar o objeto de pagamento para o Mercado Pago
+    const paymentRequest = {
+      body: {
+        additional_info: {
+          items: [
+            {
+              id: `minddesk-${subscriptionType}`,
+              title: `MindDesk ${subscriptionType.charAt(0).toUpperCase() + subscriptionType.slice(1)} - Assinatura Mensal`,
+              description: `Assinatura mensal do MindDesk ${subscriptionType}`,
+              category_id: 'services',
+              quantity: 1,
+              unit_price: paymentData.transaction_amount
+            }
+          ],
+          payer: {
+            first_name: userData?.nome?.split(' ')[0] || 'Usuário',
+            last_name: userData?.nome?.split(' ').slice(1).join(' ') || 'MindDesk',
+            email: paymentData.payer?.email || req.user.email,
+          }
+        },
+        binary_mode: false,
+        description: paymentData.description || `Assinatura Mind Desk ${subscriptionType}`,
+        external_reference: userId.toString(),
+        installments: paymentData.installments || 1,
+        metadata: {
+          user_id: userId,
+          subscription_type: subscriptionType
+        },
+        payer: {
+          entity_type: 'individual',
+          type: 'customer',
+          email: paymentData.payer?.email || req.user.email,
+          identification: paymentData.payer?.identification || {
+            type: 'CPF',
+            number: '00000000000'
+          }
+        },
+        payment_method_id: paymentData.payment_method_id,
+        token: paymentData.token,
+        transaction_amount: paymentData.transaction_amount
+      },
+      requestOptions: { idempotencyKey: `minddesk-payment-${userId}-${Date.now()}` }
+    };
+
+    // Log do objeto de pagamento
+    console.log('Enviando requisição para o Mercado Pago:', JSON.stringify(paymentRequest, null, 2));
+
+    // Criar o pagamento no Mercado Pago
+    const payments = new Payment(client);
+    const mpResponse = await payments.create(paymentRequest);
+
+    console.log('Resposta do Mercado Pago (Pagamento):', JSON.stringify(mpResponse, null, 2));
+
+    // Salvar o pagamento no banco de dados
+    const paymentRecord = await PaymentModel.create({
+      user: userId,
+      mercadoPagoId: mpResponse.id,
+      amount: paymentData.transaction_amount,
+      status: mpResponse.status,
+      subscriptionType: subscriptionType,
+      paymentMethod: paymentData.payment_method_id,
+      paymentDetails: {
+        payment_id: mpResponse.id,
+        status_detail: mpResponse.status_detail,
+        payment_type_id: mpResponse.payment_type_id,
+        installments: mpResponse.installments
+      }
+    });
+
+    // Se o pagamento for aprovado, atualizar o status da assinatura do usuário
+    if (mpResponse.status === 'approved') {
+      await User.findByIdAndUpdate(userId, {
+        subscriptionStatus: subscriptionType,
+        $inc: { points: 500 }
+      });
+
+      return res.status(200).json({
+        success: true,
+        message: 'Pagamento aprovado com sucesso',
+        payment_id: mpResponse.id,
+        status: mpResponse.status,
+        subscription: {
+          type: subscriptionType,
+          activated: true,
+          points_added: 500
+        }
+      });
+    }
+
+    // Resposta para outros status
+    res.status(200).json({
+      success: true,
+      message: `Pagamento processado com status: ${mpResponse.status}`,
+      payment_id: mpResponse.id,
+      status: mpResponse.status,
+      status_detail: mpResponse.status_detail,
+      paymentRecordId: paymentRecord._id
+    });
+
+  } catch (error) {
+    console.error('Erro ao processar pagamento direto:', error);
+    
+    // Verificar se é um erro específico do Mercado Pago
+    if (error.response && error.response.data) {
+      return res.status(error.response.status || 400).json({
+        success: false,
+        message: 'Erro ao processar pagamento no Mercado Pago',
+        error: error.response.data
+      });
+    }
+    
+    res.status(500).json({ 
+      success: false,
+      message: 'Erro ao processar pagamento', 
+      error: error.message 
+    });
   }
 };
 
@@ -119,7 +265,7 @@ export const webhookHandler = async (req, res) => {
       
       const { status, external_reference: userId, transaction_amount, payment_method_id, payment_type_id } = paymentInfo;
 
-      const payment = await Payment.findOne({
+      const payment = await PaymentModel.findOne({
         user: userId,
         amount: transaction_amount
       }).sort({ createdAt: -1 });
@@ -164,7 +310,7 @@ export const checkPaymentStatus = async (req, res) => {
   const { paymentId } = req.params;
 
   try {
-    const payment = await Payment.findById(paymentId);
+    const payment = await PaymentModel.findById(paymentId);
 
     if (!payment) {
       return res.status(404).json({ message: 'Pagamento não encontrado' });
@@ -191,7 +337,7 @@ export const updatePaymentStatus = async (req, res) => {
   const { status } = req.body;
 
   try {
-    const payment = await Payment.findById(paymentId);
+    const payment = await PaymentModel.findById(paymentId);
 
     if (!payment) {
       return res.status(404).json({ message: 'Pagamento não encontrado' });

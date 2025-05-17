@@ -50,7 +50,8 @@ app.use(cors({
   credentials: true
 }));
 
-app.use(express.json());
+// Aumentar o limite de tamanho do payload JSON para receber os dados completos de pagamento
+app.use(express.json({ limit: '1mb' }));
 app.use(cookieParser());
 
 // Logger para requisições
@@ -87,5 +88,5 @@ app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
   console.log(`Backend URL: ${process.env.BACKEND_URL}`);
-  console.log(`Webhook URL: ${process.env.BACKEND_URL}/api/payments/webhook`);
+  console.log(`Webhook URL: ${process.env.MERCADO_PAGO_WEBHOOK_URL || process.env.BACKEND_URL + '/api/payments/webhook'}`);
 });
