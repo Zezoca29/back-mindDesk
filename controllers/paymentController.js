@@ -1,4 +1,3 @@
-
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import dotenv from 'dotenv';
 import Payment from '../models/Payment.js';
@@ -38,12 +37,16 @@ export const createPayment = async (req, res) => {
     const successUrl = `${process.env.FRONTEND_URL}/payment/success`;
     const failureUrl = `${process.env.FRONTEND_URL}/payment/failure`;
     const pendingUrl = `${process.env.FRONTEND_URL}/payment/pending`;
+    
+    // Usar a URL do webhook do ngrok se disponível, senão usar BACKEND_URL
+    const webhookUrl = process.env.MERCADO_PAGO_WEBHOOK_URL || `${process.env.BACKEND_URL}/api/payments/webhook`;
 
     // Log para debug das URLs
     console.log('URLs de retorno:', {
       success: successUrl,
       failure: failureUrl,
-      pending: pendingUrl
+      pending: pendingUrl,
+      webhook: webhookUrl
     });
 
     const preferenceData = {
@@ -58,13 +61,13 @@ export const createPayment = async (req, res) => {
       payer: {
         email: req.user.email
       },
-      back_urls: { // Alterado de back_url para back_urls (plural)
+      back_urls: {
         success: successUrl,
         failure: failureUrl,
         pending: pendingUrl
       },
       auto_return: 'approved',
-      notification_url: `${process.env.BACKEND_URL}/api/payments/webhook`,
+      notification_url: webhookUrl,
       external_reference: userId.toString(),
       statement_descriptor: 'MindDesk App'
     };
@@ -101,14 +104,18 @@ export const createPayment = async (req, res) => {
 // Webhook de notificação
 export const webhookHandler = async (req, res) => {
   try {
+    console.log('Webhook recebido do Mercado Pago:', req.body);
     const { type, data } = req.body;
 
     if (type === 'payment') {
       const paymentId = data.id;
+      console.log(`Processando notificação de pagamento ID: ${paymentId}`);
 
       // Usando a API v2 do Mercado Pago para buscar informações de pagamento
       const paymentClient = new Payment(client);
       const paymentInfo = await paymentClient.get({ id: paymentId });
+      
+      console.log('Informações do pagamento:', JSON.stringify(paymentInfo, null, 2));
       
       const { status, external_reference: userId, transaction_amount, payment_method_id, payment_type_id } = paymentInfo;
 
@@ -118,6 +125,8 @@ export const webhookHandler = async (req, res) => {
       }).sort({ createdAt: -1 });
 
       if (payment) {
+        console.log(`Atualizando status do pagamento no banco de dados para: ${status}`);
+        
         payment.status = status === 'approved' ? 'approved' :
                          status === 'rejected' ? 'rejected' :
                          status === 'refunded' ? 'refunded' : 'pending';
@@ -132,11 +141,14 @@ export const webhookHandler = async (req, res) => {
         await payment.save();
 
         if (status === 'approved') {
+          console.log(`Atualizando status da assinatura do usuário ${userId} para ${payment.subscriptionType}`);
           await User.findByIdAndUpdate(userId, {
             subscriptionStatus: payment.subscriptionType,
             $inc: { points: 500 }
           });
         }
+      } else {
+        console.log('Pagamento não encontrado no banco de dados');
       }
     }
 

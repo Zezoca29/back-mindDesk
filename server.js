@@ -13,18 +13,51 @@ import bookRoutes from './routes/bookRoutes.js';
 import diaryRoutes from './routes/diaryRoutes.js';
 import trackingRoutes from './routes/trackingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
-import subscriptionRoutes from './routes/subscriptionRoutes.js'; // Nova importação
+import subscriptionRoutes from './routes/subscriptionRoutes.js';
 
 dotenv.config();
 const app = express();
 
-// Middlewares
+// Obter as origens permitidas
+const allowedOrigins = [
+  process.env.FRONTEND_URL, 
+  // Permitir origens baseadas em ngrok (para testes de webhook)
+  /^https:\/\/.*\.ngrok\.io$/,
+  /^https:\/\/.*\.ngrok-free\.app$/
+];
+
+// Configurar CORS
 app.use(cors({
-  origin: [process.env.FRONTEND_URL], // frontend URL
-  credentials: true,
+  origin: function(origin, callback) {
+    // Permitir requisições sem origem (como apps mobile ou API direto)
+    if (!origin) return callback(null, true);
+    
+    // Verificar se a origem está na lista de permitidas
+    if (allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return allowedOrigin === origin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    })) {
+      return callback(null, true);
+    }
+    
+    console.warn(`Origem bloqueada por CORS: ${origin}`);
+    callback(null, false);
+  },
+  credentials: true
 }));
+
 app.use(express.json());
 app.use(cookieParser());
+
+// Logger para requisições
+app.use((req, res, next) => {
+  console.log(`${new Date().toISOString()} | ${req.method} ${req.url}`);
+  next();
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -35,7 +68,13 @@ app.use('/api/books', bookRoutes);
 app.use('/api/diary', diaryRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/payments', paymentRoutes);
-app.use('/api/subscription', subscriptionRoutes); // Nova rota
+app.use('/api/subscription', subscriptionRoutes);
+
+// Rota para teste de webhook
+app.post('/test-webhook', (req, res) => {
+  console.log('Webhook de teste recebido:', req.body);
+  res.status(200).send('OK');
+});
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
@@ -46,4 +85,7 @@ mongoose.connect(process.env.MONGO_URI)
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL}`);
+  console.log(`Backend URL: ${process.env.BACKEND_URL}`);
+  console.log(`Webhook URL: ${process.env.BACKEND_URL}/api/payments/webhook`);
 });

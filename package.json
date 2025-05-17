@@ -5,7 +5,10 @@
   "main": "index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js",
+    "ngrok": ".\\tools\\ngrok.exe http 5000",
+    "dev:ngrok": "node setup-ngrok.js"
   },
   "keywords": [],
   "author": "",
@@ -19,6 +22,7 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "mercadopago": "^2.7.0",
-    "mongoose": "^8.14.0"
+    "mongoose": "^8.14.0",
+    "node-fetch": "^3.3.2"
   }
 }
