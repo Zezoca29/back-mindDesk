@@ -1,3 +1,4 @@
+
 import { MercadoPagoConfig, Preference } from 'mercadopago';
 import dotenv from 'dotenv';
 import Payment from '../models/Payment.js';
@@ -33,6 +34,18 @@ export const createPayment = async (req, res) => {
       amount = 49.90;
     }
 
+    // Definir as URLs de retorno com valores absolutos
+    const successUrl = `${process.env.FRONTEND_URL}/payment/success`;
+    const failureUrl = `${process.env.FRONTEND_URL}/payment/failure`;
+    const pendingUrl = `${process.env.FRONTEND_URL}/payment/pending`;
+
+    // Log para debug das URLs
+    console.log('URLs de retorno:', {
+      success: successUrl,
+      failure: failureUrl,
+      pending: pendingUrl
+    });
+
     const preferenceData = {
       items: [
         {
@@ -45,10 +58,10 @@ export const createPayment = async (req, res) => {
       payer: {
         email: req.user.email
       },
-      back_url: {
-        success: `${process.env.FRONTEND_URL}/payment/success`,
-        failure: `${process.env.FRONTEND_URL}/payment/failure`,
-        pending: `${process.env.FRONTEND_URL}/payment/pending`
+      back_urls: { // Alterado de back_url para back_urls (plural)
+        success: successUrl,
+        failure: failureUrl,
+        pending: pendingUrl
       },
       auto_return: 'approved',
       notification_url: `${process.env.BACKEND_URL}/api/payments/webhook`,
