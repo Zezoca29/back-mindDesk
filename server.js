@@ -12,13 +12,15 @@ import motivationalRoutes from './routes/motivationalRoutes.js';
 import bookRoutes from './routes/bookRoutes.js';
 import diaryRoutes from './routes/diaryRoutes.js';
 import trackingRoutes from './routes/trackingRoutes.js';
+import paymentRoutes from './routes/paymentRoutes.js';
+import subscriptionRoutes from './routes/subscriptionRoutes.js'; // Nova importação
 
 dotenv.config();
 const app = express();
 
 // Middlewares
 app.use(cors({
-  origin: ['http://localhost:5173'], // frontend URL
+  origin: [process.env.FRONTEND_URL], // frontend URL
   credentials: true,
 }));
 app.use(express.json());
@@ -32,6 +34,8 @@ app.use('/api/motivational', motivationalRoutes);
 app.use('/api/books', bookRoutes);
 app.use('/api/diary', diaryRoutes);
 app.use('/api/tracking', trackingRoutes);
+app.use('/api/payments', paymentRoutes);
+app.use('/api/subscription', subscriptionRoutes); // Nova rota
 
 // MongoDB Connection
 mongoose.connect(process.env.MONGO_URI)
