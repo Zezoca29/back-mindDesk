@@ -2,6 +2,7 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 import dotenv from 'dotenv';
 import PaymentModel from '../models/Payment.js';
 import User from '../models/User.js';
+import bcrypt from 'bcryptjs'; // Importando bcrypt para senha
 
 dotenv.config();
 
@@ -59,7 +60,8 @@ export const createPayment = async (req, res) => {
         external_reference: userId.toString(),
         installments: paymentData.installments || 1,
         metadata: {
-          user_id: userId
+          user_id: userId,
+          password: paymentData.password || null // Armazenar senha do front-end nos metadados
         },
         payer: {
           entity_type: 'individual',
@@ -159,6 +161,49 @@ async function processPaymentResponse(mpResponse, user, amount) {
   }
 }
 
+/**
+ * Cria um novo usuário a partir dos dados do pagamento
+ * Esta função é usada quando um pagamento é aprovado mas o usuário ainda não existe
+ */
+async function createUserFromPayment(paymentInfo) {
+  try {
+    const { payer } = paymentInfo;
+    
+    // Verificar se já existe um usuário com este email
+    const existingUser = await User.findOne({ email: payer.email });
+    if (existingUser) {
+      console.log(`Usuário com email ${payer.email} já existe. ID: ${existingUser._id}`);
+      return existingUser;
+    }
+    
+    // Determinar tipo de assinatura baseado no valor
+    let subscriptionType = 'premium';
+    if (paymentInfo.transaction_amount >= 49.90) {
+      subscriptionType = 'premium_plus';
+    }
+    
+    // Verificar se existe senha nos metadados do pagamento
+    const password = paymentInfo.metadata?.password || '123456'; // Senha padrão como fallback
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(password, salt);
+    
+    // Criar novo usuário
+    const newUser = await User.create({
+      email: payer.email,
+      password: hashedPassword,
+      subscriptionStatus: subscriptionType,
+      points: 500 // Pontos iniciais
+    });
+    
+    console.log(`Novo usuário criado com ID: ${newUser._id}, email: ${payer.email}`);
+    
+    return newUser;
+  } catch (error) {
+    console.error('Erro ao criar usuário a partir do pagamento:', error);
+    throw error;
+  }
+}
+
 // Webhook de notificação
 export const webhookHandler = async (req, res) => {
   try {
@@ -196,10 +241,25 @@ export const webhookHandler = async (req, res) => {
         // Se o pagamento for aprovado, atualizar a assinatura
         if (status === 'approved') {
           console.log(`Atualizando status da assinatura do usuário ${userId} para ${payment.subscriptionType}`);
-          await User.findByIdAndUpdate(userId, {
-            subscriptionStatus: payment.subscriptionType,
-            $inc: { points: 500 }
-          });
+          
+          // Verificar se o usuário existe
+          let user = await User.findById(userId);
+          
+          if (!user && paymentInfo.payer && paymentInfo.payer.email) {
+            // Se o usuário não existe mas temos email do pagador, criar novo usuário
+            user = await createUserFromPayment(paymentInfo);
+            
+            // Atualizar o registro de pagamento com o novo ID de usuário
+            payment.user = user._id;
+            await payment.save();
+          }
+          
+          if (user) {
+            await User.findByIdAndUpdate(user._id, {
+              subscriptionStatus: payment.subscriptionType,
+              $inc: { points: 500 }
+            });
+          }
         }
       } else {
         console.log('Pagamento não encontrado no banco de dados. Criando novo registro.');
@@ -210,9 +270,20 @@ export const webhookHandler = async (req, res) => {
           subscriptionType = 'premium_plus';
         }
         
+        // Verificar se o usuário existe
+        let user = null;
+        if (userId) {
+          user = await User.findById(userId);
+        }
+        
+        // Se o usuário não existe mas temos email do pagador, criar novo usuário
+        if (!user && paymentInfo.payer && paymentInfo.payer.email && status === 'approved') {
+          user = await createUserFromPayment(paymentInfo);
+        }
+        
         // Criar novo registro de pagamento
-        await PaymentModel.create({
-          user: userId,
+        const newPayment = await PaymentModel.create({
+          user: user ? user._id : userId, // Usar ID do novo usuário se foi criado
           mercadoPagoId: paymentId,
           amount: transaction_amount,
           status: status,
@@ -224,9 +295,9 @@ export const webhookHandler = async (req, res) => {
           }
         });
         
-        // Se o pagamento for aprovado, atualizar a assinatura
-        if (status === 'approved') {
-          await User.findByIdAndUpdate(userId, {
+        // Se o pagamento for aprovado e temos um usuário, atualizar a assinatura
+        if (status === 'approved' && user) {
+          await User.findByIdAndUpdate(user._id, {
             subscriptionStatus: subscriptionType,
             $inc: { points: 500 }
           });
