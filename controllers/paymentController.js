@@ -1,3 +1,4 @@
+// controllers/paymentController.js
 import { MercadoPagoConfig, Payment } from 'mercadopago';
 import dotenv from 'dotenv';
 import PaymentModel from '../models/Payment.js';
@@ -13,7 +14,6 @@ const client = new MercadoPagoConfig({
 
 /**
  * Cria um pagamento diretamente no Mercado Pago com cadastro de novo usuário
- * Esta versão cria um novo usuário ao invés de atualizar um existente
  */
 export const createPaymentWithSignup = async (req, res) => {
   try {
@@ -113,10 +113,9 @@ export const createPaymentWithSignup = async (req, res) => {
       newUser = await User.create({
         email: userData.email,
         password: hashedPassword,
-        nome: userData.nome, // Adicionando nome do usuário
+        nome: userData.nome,
         subscriptionStatus: mpResponse.transaction_amount >= 49.90 ? 'premium_plus' : 'premium',
-        points: 500,
-        instagramId: undefined // Definir explicitamente como undefined para não salvar como null
+        points: 500
       });
 
       // Salvar registro de pagamento
@@ -142,9 +141,8 @@ export const createPaymentWithSignup = async (req, res) => {
       newUser = await User.create({
         email: userData.email,
         password: hashedPassword,
-        nome: userData.nome, // Adicionando nome do usuário
-        subscriptionStatus: 'free',
-        instagramId: undefined // Definir explicitamente como undefined para não salvar como null
+        nome: userData.nome,
+        subscriptionStatus: 'free'
       });
     }
 

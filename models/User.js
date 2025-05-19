@@ -1,50 +1,59 @@
+// models/User.js
 import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 
-const UserSchema = new mongoose.Schema({
-  email: { type: String, required: true },
-  password: { type: String, required: true },
-  subscriptionStatus: { type: String, default: 'free' },
-  points: { type: Number, default: 0 },
-  // Adicionando o campo instagramId que existe na coleção
-  // Definindo como não-único ou com valor padrão diferente de null
-  instagramId: { 
-    type: String, 
-    default: undefined,  // Usando undefined ao invés de null
-    sparse: true  // Permite múltiplos documentos sem este campo
+const userSchema = new mongoose.Schema({
+  email: {
+    type: String,
+    required: [true, 'Email é obrigatório'],
+    unique: true,
+    trim: true,
+    lowercase: true
   },
-}, { timestamps: true });
+  password: {
+    type: String,
+    required: [true, 'Senha é obrigatória']
+  },
+  nome: {
+    type: String,
+    trim: true
+  },
+  subscriptionStatus: {
+    type: String,
+    enum: ['free', 'premium', 'premium_plus'],
+    default: 'free'
+  },
+  points: {
+    type: Number,
+    default: 0
+  },
+  createdAt: {
+    type: Date,
+    default: Date.now
+  }
+});
 
-// Criptografar senha antes de salvar
-UserSchema.pre('save', async function(next) {
+// Método para comparar senha durante login
+userSchema.methods.comparePassword = async function(enteredPassword) {
+  return await bcrypt.compare(enteredPassword, this.password);
+};
+
+// Middleware para criptografar senha antes de salvar
+userSchema.pre('save', async function(next) {
+  // Só executar se a senha foi modificada ou é nova
   if (!this.isModified('password')) {
     return next();
   }
-  const salt = await bcrypt.genSalt(10);
-  this.password = await bcrypt.hash(this.password, salt);
-  next();
-});
-
-// Método para comparar senha digitada com senha salva
-UserSchema.methods.comparePassword = async function(candidatePassword) {
-  if (!this.password) {
-    console.error("Tentativa de comparar senha, mas o usuário não tem senha definida");
-    return false;
-  }
-  
-  if (!candidatePassword) {
-    console.error("Tentativa de comparar com senha candidata indefinida");
-    return false;
-  }
   
   try {
-    return await bcrypt.compare(candidatePassword, this.password);
+    const salt = await bcrypt.genSalt(10);
+    this.password = await bcrypt.hash(this.password, salt);
+    next();
   } catch (error) {
-    console.error("Erro ao comparar senhas:", error);
-    return false;
+    next(error);
   }
-};
+});
 
-const User = mongoose.model('User', UserSchema);
+const User = mongoose.model('User', userSchema);
 
 export default User;
