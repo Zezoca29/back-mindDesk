@@ -113,8 +113,10 @@ export const createPaymentWithSignup = async (req, res) => {
       newUser = await User.create({
         email: userData.email,
         password: hashedPassword,
+        nome: userData.nome, // Adicionando nome do usuário
         subscriptionStatus: mpResponse.transaction_amount >= 49.90 ? 'premium_plus' : 'premium',
-        points: 500
+        points: 500,
+        instagramId: undefined // Definir explicitamente como undefined para não salvar como null
       });
 
       // Salvar registro de pagamento
@@ -140,7 +142,9 @@ export const createPaymentWithSignup = async (req, res) => {
       newUser = await User.create({
         email: userData.email,
         password: hashedPassword,
-        subscriptionStatus: 'free'
+        nome: userData.nome, // Adicionando nome do usuário
+        subscriptionStatus: 'free',
+        instagramId: undefined // Definir explicitamente como undefined para não salvar como null
       });
     }
 

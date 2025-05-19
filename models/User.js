@@ -1,11 +1,18 @@
 import mongoose from 'mongoose';
-import bcrypt from 'bcryptjs'; // não esqueça de importar o bcrypt
+import bcrypt from 'bcryptjs';
 
 const UserSchema = new mongoose.Schema({
   email: { type: String, required: true },
   password: { type: String, required: true },
   subscriptionStatus: { type: String, default: 'free' },
   points: { type: Number, default: 0 },
+  // Adicionando o campo instagramId que existe na coleção
+  // Definindo como não-único ou com valor padrão diferente de null
+  instagramId: { 
+    type: String, 
+    default: undefined,  // Usando undefined ao invés de null
+    sparse: true  // Permite múltiplos documentos sem este campo
+  },
 }, { timestamps: true });
 
 // Criptografar senha antes de salvar
