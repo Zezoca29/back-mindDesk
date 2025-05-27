@@ -1,10 +1,16 @@
+// routes/payments.js
 import express from 'express';
-import { createPaymentWithSignup } from '../controllers/paymentController.js';
+import { createPaymentWithSignup, mercadoPagoWebhook, checkPayment } from '../controllers/paymentController.js';
 
 const router = express.Router();
 
-// Nova rota para pagamento com cadastro - não requer autenticação
+// Rota para criar pagamento com cadastro
 router.post('/create-with-signup', createPaymentWithSignup);
 
+// Webhook do Mercado Pago (deve ser configurado no painel do MP)
+router.post('/webhook', mercadoPagoWebhook);
+
+// Rota para verificar status de um pagamento (debug/admin)
+router.get('/check/:paymentId', checkPayment);
 
 export default router;
