@@ -19,7 +19,12 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ message: 'Usuário já existe' });
     }
 
-    const user = new User({ email, password, nome });
+    // Criar usuário com senha em texto simples (sem criptografia)
+    const user = new User({ 
+      email, 
+      password, // Senha armazenada diretamente
+      nome 
+    });
     await user.save();
 
     res.status(201).json({
@@ -31,6 +36,7 @@ export const registerUser = async (req, res) => {
       token: generateToken(user._id),
     });
   } catch (error) {
+    console.error('Erro no cadastro:', error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -55,11 +61,16 @@ export const loginUser = async (req, res) => {
       return res.status(401).json({ message: 'Erro na autenticação. Contate o suporte.' });
     }
     
+    // Comparação direta das senhas (sem criptografia)
     const isPasswordValid = await user.comparePassword(password);
 
     if (!isPasswordValid) {
+      console.log('Login falhou - Senha fornecida:', password);
+      console.log('Login falhou - Senha armazenada:', user.password);
       return res.status(401).json({ message: 'Credenciais inválidas (senha incorreta)' });
     }
+
+    console.log('Login realizado com sucesso para:', user.email);
 
     res.status(200).json({
       _id: user._id,

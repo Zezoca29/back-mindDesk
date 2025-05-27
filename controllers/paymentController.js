@@ -3,7 +3,6 @@ import { MercadoPagoConfig, Payment } from 'mercadopago';
 import dotenv from 'dotenv';
 import PaymentModel from '../models/Payment.js';
 import User from '../models/User.js';
-import bcrypt from 'bcryptjs';
 
 dotenv.config();
 
@@ -106,13 +105,10 @@ export const createPaymentWithSignup = async (req, res) => {
     // Criar o usuário somente se o pagamento for aprovado
     let newUser;
     if (mpResponse.status === 'approved') {
-      // Criar novo usuário com senha criptografada
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(userData.senha, salt);
-      
+      // Criar novo usuário sem criptografar a senha
       newUser = await User.create({
         email: userData.email,
-        password: hashedPassword,
+        password: userData.senha, // Senha armazenada diretamente sem criptografia
         nome: userData.nome,
         subscriptionStatus: mpResponse.transaction_amount >= 49.90 ? 'premium_plus' : 'premium',
         points: 500
@@ -135,12 +131,9 @@ export const createPaymentWithSignup = async (req, res) => {
       });
     } else {
       // Para pagamentos pendentes ou rejeitados, ainda criar o usuário mas com status free
-      const salt = await bcrypt.genSalt(10);
-      const hashedPassword = await bcrypt.hash(userData.senha, salt);
-      
       newUser = await User.create({
         email: userData.email,
-        password: hashedPassword,
+        password: userData.senha, // Senha armazenada diretamente sem criptografia
         nome: userData.nome,
         subscriptionStatus: 'free'
       });
