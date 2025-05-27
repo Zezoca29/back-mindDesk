@@ -1,9 +1,10 @@
+// routes/diary.js
 import express from 'express';
-import { createDiaryEntry } from '../controllers/diaryController.js';
-import { protect } from '../middlewares/authMiddleware.js';
+import { createDiaryEntry, getDiaryEntries } from '../controllers/diaryController.js';
 
 const router = express.Router();
 
-router.post('/create', protect, createDiaryEntry);
+router.post('/', createDiaryEntry);
+router.get('/', getDiaryEntries);
 
 export default router;
