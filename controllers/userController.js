@@ -4,7 +4,16 @@ import jwt from 'jsonwebtoken';
 // Middleware para verificar token
 export const verifyToken = async (req, res, next) => {
   try {
-    const token = req.headers.authorization?.replace('Bearer ', '');
+    const authHeader = req.headers.authorization;
+    
+    if (!authHeader) {
+      return res.status(401).json({
+        success: false,
+        message: 'Header de autorização não fornecido'
+      });
+    }
+
+    const token = authHeader.replace('Bearer ', '');
     
     if (!token) {
       return res.status(401).json({
@@ -13,7 +22,11 @@ export const verifyToken = async (req, res, next) => {
       });
     }
 
+    console.log('Verificando token:', token.substring(0, 20) + '...');
+
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    console.log('Token decodificado:', decoded);
+    
     const user = await User.findById(decoded.id).select('-password');
     
     if (!user) {
@@ -23,13 +36,22 @@ export const verifyToken = async (req, res, next) => {
       });
     }
 
+    console.log('Usuário encontrado:', user.email);
     req.user = user;
     next();
   } catch (error) {
     console.error('Erro na verificação do token:', error);
+    
+    let message = 'Token inválido';
+    if (error.name === 'TokenExpiredError') {
+      message = 'Token expirado';
+    } else if (error.name === 'JsonWebTokenError') {
+      message = 'Token malformado';
+    }
+    
     return res.status(401).json({
       success: false,
-      message: 'Token inválido'
+      message: message
     });
   }
 };
@@ -37,24 +59,43 @@ export const verifyToken = async (req, res, next) => {
 // Endpoint para buscar dados do usuário atual
 export const getCurrentUser = async (req, res) => {
   try {
+    console.log('Buscando dados do usuário atual...');
+    
     const user = req.user; // Vem do middleware verifyToken
     
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'Usuário não encontrado'
+      });
+    }
+
+    const userData = {
+      _id: user._id,
+      email: user.email,
+      nome: user.nome,
+      subscriptionStatus: user.subscriptionStatus,
+      points: user.points,
+      createdAt: user.createdAt
+    };
+
+    console.log('Retornando dados do usuário:', userData);
+    
+    // Garantir que a resposta seja JSON
+    res.setHeader('Content-Type', 'application/json');
     res.status(200).json({
       success: true,
-      user: {
-        _id: user._id,
-        email: user.email,
-        nome: user.nome,
-        subscriptionStatus: user.subscriptionStatus,
-        points: user.points,
-        createdAt: user.createdAt
-      }
+      user: userData
     });
   } catch (error) {
     console.error('Erro ao buscar usuário atual:', error);
+    
+    // Garantir que mesmo em erro, a resposta seja JSON
+    res.setHeader('Content-Type', 'application/json');
     res.status(500).json({
       success: false,
-      message: 'Erro interno do servidor'
+      message: 'Erro interno do servidor',
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
@@ -82,7 +123,7 @@ export const checkEmailExists = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Erro ao verificar disponibilidade do email', 
-      error: error.message 
+      error: process.env.NODE_ENV === 'development' ? error.message : undefined
     });
   }
 };
