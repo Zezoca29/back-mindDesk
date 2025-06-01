@@ -1,9 +1,12 @@
 import express from 'express';
-import { checkEmailExists } from '../controllers/userController.js';
+import { checkEmailExists, getCurrentUser, verifyToken } from '../controllers/userController.js';
 
 const router = express.Router();
 
-// Rota para verificar se um email já está em uso
+// Rota para verificar se email existe
 router.post('/check-email', checkEmailExists);
+
+// Rota para buscar dados do usuário atual (protegida)
+router.get('/me', verifyToken, getCurrentUser);
 
 export default router;

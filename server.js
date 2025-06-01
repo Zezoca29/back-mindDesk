@@ -14,14 +14,17 @@ import diaryRoutes from './routes/diaryRoutes.js';
 import trackingRoutes from './routes/trackingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
+import userRoutes from './routes/userRoutes.js';
 
+// Configurações do ambiente
 dotenv.config();
 const app = express();
 
 // Obter as origens permitidas
 const allowedOrigins = [
   process.env.FRONTEND_URL, 
-  // Permitir origens baseadas em ngrok (para testes de webhook)
+  'http://localhost:5173', // Libera localhost:5173
+  'https://localhost:5173', // Caso use HTTPS local
   /^https:\/\/.*\.ngrok\.io$/,
   /^https:\/\/.*\.ngrok-free\.app$/
 ];
@@ -70,6 +73,7 @@ app.use('/api/diary', diaryRoutes);
 app.use('/api/tracking', trackingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/subscription', subscriptionRoutes);
+app.use('/api/user', userRoutes);
 
 // Rota para teste de webhook
 app.post('/test-webhook', (req, res) => {
