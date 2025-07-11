@@ -5,7 +5,9 @@ import {
   verifyToken,
   recordMood,
   getMoodHistory,
-  getMoodStats
+  getMoodStats,
+  recordMeditation,
+  recordDiaryEntry
 } from '../controllers/userController.js';
 
 const router = express.Router();
@@ -20,5 +22,9 @@ router.get('/me', verifyToken, getCurrentUser);
 router.post('/mood', verifyToken, recordMood);
 router.get('/mood/history', verifyToken, getMoodHistory);
 router.get('/mood/stats', verifyToken, getMoodStats);
+
+// Rotas para atividades
+router.post('/meditation', verifyToken, recordMeditation);
+router.post('/diary', verifyToken, recordDiaryEntry);
 
 export default router;

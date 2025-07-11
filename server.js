@@ -15,6 +15,7 @@ import trackingRoutes from './routes/trackingRoutes.js';
 import paymentRoutes from './routes/paymentRoutes.js';
 import subscriptionRoutes from './routes/subscriptionRoutes.js';
 import userRoutes from './routes/userRoutes.js';
+import habitRoutes from './routes/habitRoutes.js';
 
 // Configurações do ambiente
 dotenv.config();
@@ -26,7 +27,11 @@ const allowedOrigins = [
   'http://localhost:5173', // Libera localhost:5173
   'https://localhost:5173', // Caso use HTTPS local
   /^https:\/\/.*\.ngrok\.io$/,
-  /^https:\/\/.*\.ngrok-free\.app$/
+  /^https:\/\/.*\.ngrok-free\.app$/,
+  /^https:\/\/.*\.onrender\.com$/, // Render
+  /^https:\/\/.*\.railway\.app$/, // Railway
+  /^https:\/\/.*\.herokuapp\.com$/, // Heroku
+  /^https:\/\/.*\.vercel\.app$/ // Vercel
 ];
 
 // Configurar CORS
@@ -74,6 +79,7 @@ app.use('/api/tracking', trackingRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/subscription', subscriptionRoutes);
 app.use('/api/user', userRoutes);
+app.use('/api/habits', habitRoutes);
 
 // Rota para teste de webhook
 app.post('/test-webhook', (req, res) => {

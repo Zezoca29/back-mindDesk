@@ -84,6 +84,25 @@ const userSchema = new mongoose.Schema({
       default: null
     }
   },
+  // Configurações de metas personalizadas
+  goals: {
+    dailyMoodEntries: {
+      type: Number,
+      default: 1
+    },
+    dailyMeditationMinutes: {
+      type: Number,
+      default: 10
+    },
+    dailyDiaryEntries: {
+      type: Number,
+      default: 1
+    },
+    weeklyMindfulnessHours: {
+      type: Number,
+      default: 2
+    }
+  },
   createdAt: {
     type: Date,
     default: Date.now
@@ -95,7 +114,7 @@ userSchema.methods.comparePassword = async function(enteredPassword) {
   return this.password === enteredPassword;
 };
 
-// Método para atualizar streak
+// Método para atualizar streak melhorado
 userSchema.methods.updateStreak = function() {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -149,6 +168,113 @@ userSchema.methods.updateMoodStats = function(mood) {
   
   this.moodStats.averageMood = total / this.moodStats.totalEntries;
 };
+
+// Método para calcular progresso da meta diária
+userSchema.methods.getDailyProgress = function() {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  // Metas diárias (usar as configurações personalizadas do usuário)
+  const dailyGoals = {
+    moodEntries: this.goals.dailyMoodEntries,
+    meditationMinutes: this.goals.dailyMeditationMinutes,
+    diaryEntries: this.goals.dailyDiaryEntries
+  };
+
+  // Progresso atual do dia
+  const todayProgress = {
+    moodEntries: 0,
+    meditationMinutes: 0,
+    diaryEntries: 0
+  };
+
+  // Verificar se fez entrada de humor hoje
+  if (this.moodStats.lastMoodEntry) {
+    const lastMoodDate = new Date(this.moodStats.lastMoodEntry);
+    if (lastMoodDate >= today && lastMoodDate < tomorrow) {
+      todayProgress.moodEntries = 1;
+    }
+  }
+
+  // Verificar outras atividades de hoje (simulação - você pode implementar com base em timestamps reais)
+  const hasActivityToday = this.lastActivityDate && 
+    new Date(this.lastActivityDate) >= today && 
+    new Date(this.lastActivityDate) < tomorrow;
+
+  if (hasActivityToday) {
+    todayProgress.meditationMinutes = Math.min(this.activityStats.totalMeditations > 0 ? 10 : 0, dailyGoals.meditationMinutes);
+    todayProgress.diaryEntries = this.activityStats.totalDiaryEntries > 0 ? 1 : 0;
+  }
+
+  // Calcular porcentagem total
+  const totalPoints = Object.keys(dailyGoals).reduce((sum, key) => {
+    const progress = Math.min(todayProgress[key], dailyGoals[key]);
+    return sum + (progress / dailyGoals[key]);
+  }, 0);
+
+  const percentage = Math.round((totalPoints / Object.keys(dailyGoals).length) * 100);
+
+  return {
+    percentage,
+    goals: dailyGoals,
+    progress: todayProgress,
+    isCompleted: percentage >= 100
+  };
+};
+
+// Método para calcular minutos totais de mindfulness
+userSchema.methods.getTotalMindfulnessMinutes = function() {
+  // Calcular baseado nas atividades do usuário
+  const meditationMinutes = this.activityStats.totalMeditations * 10; // 10 min por meditação em média
+  const moodReflectionMinutes = this.moodStats.totalEntries * 3; // 3 min por entrada de humor
+  const diaryMinutes = this.activityStats.totalDiaryEntries * 15; // 15 min por entrada de diário
+  
+  return meditationMinutes + moodReflectionMinutes + diaryMinutes;
+};
+
+// Método para verificar se o usuário está ativo hoje
+userSchema.methods.isActiveToday = function() {
+  if (!this.lastActivityDate) return false;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  
+  const lastActivity = new Date(this.lastActivityDate);
+  
+  return lastActivity >= today && lastActivity < tomorrow;
+};
+
+// Método para resetar streak se necessário
+userSchema.methods.checkAndResetStreak = function() {
+  if (!this.lastActivityDate) return;
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  
+  const lastActivity = new Date(this.lastActivityDate);
+  lastActivity.setHours(0, 0, 0, 0);
+  
+  const diffTime = today.getTime() - lastActivity.getTime();
+  const diffDays = diffTime / (1000 * 60 * 60 * 24);
+  
+  // Se passou mais de 1 dia sem atividade, reset do streak
+  if (diffDays > 1) {
+    this.streakCount = 0;
+  }
+};
+
+// Middleware para verificar streak antes de salvar
+userSchema.pre('save', function(next) {
+  // Verificar e resetar streak se necessário
+  this.checkAndResetStreak();
+  next();
+});
 
 const User = mongoose.model('User', userSchema);
 
